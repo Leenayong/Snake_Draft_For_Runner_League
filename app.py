@@ -3,14 +3,19 @@ import pandas as pd
 
 # 페이지 설정
 st.set_page_config(page_title="러너리그 시즌4 드래프트 시뮬레이터", layout="wide")
-st.title("🎮 러너리그 2026 시즌 4: 드래프트 시뮬레이터")
-st.write("탱커 팀장들이 스네이크 방식으로 팀원을 선발합니다.")
 
-# 1. 고정 데이터 설정
+# 제목 및 설명
+st.title("🎮 러너리그 2026 시즌 4: 전략 드래프트 시뮬레이터")
+st.markdown("""
+이 시뮬레이터는 **인섹 → 이선생 → 소우릎 → 댕균 → 둥그레** 순서의 스네이크 드래프트를 지원합니다.
+사이드바에서 선수들의 티어를 설정하고, 봇의 **선택 전략 가중치**를 조절하여 결과를 확인해보세요!
+""")
+st.markdown("---")
+
+# 1. 고정 데이터 및 설정
 TIER_SCORES = {'S': 10, 'A': 7, 'B': 4, 'C': 2}
 LEADER_ORDER = ["인섹", "이선생", "소우릎", "댕균", "둥그레"]
 
-# 이미지에서 추출한 선수 명단
 if 'members' not in st.session_state:
     st.session_state.members = [
         {"name": "갱맘", "role": "Dealer", "tier": "S"},
@@ -35,15 +40,31 @@ if 'members' not in st.session_state:
         {"name": "인간젤리", "role": "Supporter", "tier": "S"}
     ]
 
-# 2. 사이드바: 티어 수정 기능
-st.sidebar.header("📋 선수 티어 조정")
+# 2. 사이드바: 봇 전략 가중치 조절 (Slider)
+st.sidebar.header("⚙️ 드래프트 전략 설정")
+strategy_val = st.sidebar.slider(
+    "전략 가중치 (희소성 보너스)",
+    min_value=0, max_value=10, value=5,
+    help="낮을수록 '티어'를 중시하고, 높을수록 '포지션 밸런스'를 중시합니다."
+)
+
+# 가중치 설명 문구
+if strategy_val <= 3:
+    st.sidebar.success("🔥 **티어 우선**: 포지션 상관없이 고티어 선수를 먼저 선점합니다.")
+elif strategy_val >= 7:
+    st.sidebar.warning("⚖️ **밸런스 중시**: 특정 직업군 매물이 적으면 티어가 낮아도 먼저 뽑습니다.")
+else:
+    st.sidebar.info("⭐ **권장(Balanced)**: 실력과 포지션 상황을 적절히 조화합니다.")
+
+st.sidebar.markdown("---")
+st.sidebar.header("📋 선수 티어 설정")
 for i, m in enumerate(st.session_state.members):
     st.session_state.members[i]['tier'] = st.sidebar.selectbox(
         f"{m['name']} ({m['role']})", ['S', 'A', 'B', 'C'], 
-        index=['S', 'A', 'B', 'C'].index(m['tier']), key=f"tier_{i}"
+        index=['S', 'A', 'B', 'C'].index(m['tier']), key=f"t_{i}"
     )
 
-# 3. 드래프트 로직
+# 3. 드래프트 실행 로직
 if st.button("🚀 드래프트 시뮬레이션 시작!"):
     pool = [m.copy() for m in st.session_state.members]
     for m in pool: m['score'] = TIER_SCORES[m['tier']]
@@ -52,40 +73,50 @@ if st.button("🚀 드래프트 시뮬레이션 시작!"):
     slots = {name: {'Dealer': 2, 'Supporter': 2} for name in LEADER_ORDER}
     history = []
 
+    # 4라운드 스네이크 드래프트
     for r in range(1, 5):
-        # 스네이크 방식: 홀수 라운드 정순, 짝수 라운드 역순
         current_order = LEADER_ORDER if r % 2 != 0 else list(reversed(LEADER_ORDER))
         
         for l_name in current_order:
-            # 희소성 계산 (남은 S, A급 인원)
+            # 실시간 희소성 체크 (남은 A티어 이상 인원)
             scarcity = {role: len([m for m in pool if m['role'] == role and m['score'] >= 7]) for role in ['Dealer', 'Supporter']}
             
-            # 봇의 선택 알고리즘
             best_idx = -1
             max_val = -100
+            
             for i, m in enumerate(pool):
                 if slots[l_name][m['role']] > 0:
-                    bonus = 5 if scarcity[m['role']] <= 2 else 0
-                    if m['score'] + bonus > max_val:
-                        max_val = m['score'] + bonus
+                    # 가치 평가 = 티어 점수 + (전략 가중치 if 매물 부족 else 0)
+                    bonus = strategy_val if scarcity[m['role']] <= 2 else 0
+                    eval_score = m['score'] + bonus
+                    
+                    if eval_score > max_val:
+                        max_val = eval_score
                         best_idx = i
             
             if best_idx != -1:
                 picked = pool.pop(best_idx)
                 teams[l_name].append(picked)
                 slots[l_name][picked['role']] -= 1
-                history.append({"라운드": r, "팀장": l_name, "선택 선수": picked['name'], "포지션": picked['role'], "티어": picked['tier']})
+                history.append({
+                    "라운드": r, 
+                    "팀장": l_name, 
+                    "선택": picked['name'], 
+                    "포지션": picked['role'], 
+                    "티어": picked['tier'],
+                    "판단 근거": "희소성 고려 선점" if strategy_val > 0 and scarcity[picked['role']] <= 2 else "티어 우선 선택"
+                })
 
-    # 결과 전시
+    # 결과 레이아웃
     st.subheader("📊 드래프트 히스토리")
-    st.table(pd.DataFrame(history))
+    st.dataframe(pd.DataFrame(history), use_container_width=True)
 
     st.subheader("🏆 최종 팀 라인업")
     cols = st.columns(5)
     for i, l_name in enumerate(LEADER_ORDER):
         with cols[i]:
-            st.info(f"**{l_name} 팀**")
+            st.success(f"**{l_name} 팀**")
             st.write(f"🛡️ {l_name} (Tank)")
             for m in teams[l_name]:
-                role_icon = "⚔️" if m['role'] == 'Dealer' else "🧪"
-                st.write(f"{role_icon} {m['name']} ({m['tier']})")
+                icon = "⚔️" if m['role'] == 'Dealer' else "🧪"
+                st.write(f"{icon} {m['name']} ({m['tier']})")
