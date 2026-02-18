@@ -30,7 +30,7 @@ if 'members' not in st.session_state:
         {"name": "핑맨", "role": "Dealer", "tier": "S"},
         {"name": "꽃핀", "role": "Supporter", "tier": "A"},
         {"name": "뀨냥냥", "role": "Supporter", "tier": "B"},
-        {"name": "담유미", "role": "Supporter", "tier": "S"},
+        {"name": "담유이", "role": "Supporter", "tier": "S"},
         {"name": "멋사", "role": "Supporter", "tier": "A"},
         {"name": "새담", "role": "Supporter", "tier": "B"},
         {"name": "서넹", "role": "Supporter", "tier": "B"},
@@ -120,3 +120,4 @@ if st.button("🚀 드래프트 시뮬레이션 시작!"):
             for m in teams[l_name]:
                 icon = "⚔️" if m['role'] == 'Dealer' else "🧪"
                 st.write(f"{icon} {m['name']} ({m['tier']})")
+
